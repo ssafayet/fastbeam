@@ -90,6 +90,29 @@ export function runDiscovery(): Promise<void> {
   return running
 }
 
+/**
+ * Leave and re-join every discovery room. Used after the tab comes back from the background: iOS and
+ * Android kill relay websockets silently, and a room on a zombie socket never announces again.
+ */
+export async function rejoinRooms(reason: string): Promise<void> {
+  if (rooms.size === 0) {
+    void runDiscovery()
+    return
+  }
+  L.info(`re-joining ${rooms.size} discovery room(s): ${reason}`)
+  const ids = [...rooms.keys()]
+  for (const id of ids) {
+    const handle = rooms.get(id)
+    rooms.delete(id)
+    try {
+      await handle?.leave()
+    } catch {
+      /* already gone */
+    }
+  }
+  for (const id of ids) rooms.set(id, joinDiscoveryRoom(id))
+}
+
 export function initDiscovery(): void {
   void runDiscovery()
 

@@ -289,6 +289,23 @@ function openHostRoom(code: string): void {
   })
 }
 
+/** Re-join the active code room on a fresh relay socket (after the tab was in the background). */
+export async function rejoinHostRoom(): Promise<void> {
+  const cur = host.value
+  const room = hostRoom
+  if (!cur || !room || room.retired) return
+  if (room.links.size > 0) return // someone is connected through it; leaving would drop them
+  L.info(`re-joining code room ${room.code} after resume`)
+  hostRoom = null
+  window.clearTimeout(room.expiry)
+  try {
+    await room.handle.leave()
+  } catch {
+    /* already gone */
+  }
+  if (host.value?.code === cur.code) openHostRoom(cur.code)
+}
+
 /** Start (or keep) hosting a code. Called when the pairing UI becomes visible. */
 export function startHosting(): void {
   if (host.value) return

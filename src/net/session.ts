@@ -19,7 +19,15 @@ import { deviceName, discoverable } from '../state/settings'
 import { toast } from '../state/toast'
 import { handleChunk, handleControl, onPeerGone } from '../transfer/manager'
 import { verificationCode } from '../transfer/protocol'
+import { rejoinRooms } from './discovery'
+import { rejoinHostRoom } from './pairing'
+import { realStates } from './patientPc'
 import type { ControlMessage, PeerLink } from './peerLink'
+
+/** No reply to the resume ping within this long means the transport died while we were suspended. */
+const RESUME_PROBE_MS = 4_000
+/** Hidden longer than this and the relay sockets are assumed dead too. */
+const RESUME_REJOIN_AFTER_MS = 45_000
 
 export interface HelloMessage extends ControlMessage {
   type: 'hello'
@@ -325,9 +333,61 @@ export function initSessionBroadcast(): void {
   const nudge = () => {
     for (const p of peers.peek().values()) for (const l of p.links) l.sendControl({ type: 'ping' })
   }
+
+  let hiddenAt = 0
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') nudge()
+    if (document.visibilityState === 'hidden') {
+      hiddenAt = Date.now()
+      return
+    }
+    const hiddenFor = hiddenAt ? Date.now() - hiddenAt : 0
+    hiddenAt = 0
+    void checkLinksAfterResume(hiddenFor)
   })
-  window.addEventListener('pageshow', nudge)
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) void checkLinksAfterResume(RESUME_REJOIN_AFTER_MS + 1)
+  })
   window.addEventListener('online', nudge)
+}
+
+/**
+ * Back from the background: mobile browsers kill WebRTC transports and relay sockets without telling the
+ * page, and our timers were frozen. Probe every link with a ping; anything silent is closed at once so
+ * Trystero re-handshakes it, and after a long absence (or any dead link) the relay rooms are rejoined.
+ */
+async function checkLinksAfterResume(hiddenForMs: number): Promise<void> {
+  const all = [...peers.peek().values()].flatMap((p) => p.links.map((l) => ({ peer: p, link: l })))
+  if (all.length === 0) {
+    if (hiddenForMs > RESUME_REJOIN_AFTER_MS) void rejoinRooms(`hidden ${Math.round(hiddenForMs / 1000)} s`)
+    return
+  }
+  L.info(`resumed after ${Math.round(hiddenForMs / 1000)} s hidden; probing ${all.length} link(s)`)
+  let dead = 0
+  const before = new Map<PeerLink, number>()
+  for (const { peer, link } of all) {
+    const st = realStates(link.pc)
+    if (!link.open || st.connection === 'failed' || st.connection === 'closed' || st.ice === 'failed' || st.ice === 'closed') {
+      L.warn(`${peer.name}: transport died while hidden (${st.connection}/${st.ice}); closing link`)
+      link.close()
+      dead++
+      continue
+    }
+    before.set(link, peer.lastSeen)
+    link.sendControl({ type: 'ping' })
+  }
+  await new Promise((r) => window.setTimeout(r, RESUME_PROBE_MS))
+  for (const { peer, link } of all) {
+    const seen = before.get(link)
+    if (seen === undefined) continue
+    const now = getPeer(peer.deviceId)?.lastSeen ?? 0
+    if (now <= seen) {
+      L.warn(`${peer.name}: no answer ${RESUME_PROBE_MS / 1000} s after resume; closing link to reconnect`)
+      link.close()
+      dead++
+    }
+  }
+  if (dead > 0 || hiddenForMs > RESUME_REJOIN_AFTER_MS) {
+    await rejoinRooms(dead > 0 ? `${dead} dead link(s) after resume` : `hidden ${Math.round(hiddenForMs / 1000)} s`)
+    void rejoinHostRoom()
+  }
 }
