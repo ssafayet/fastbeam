@@ -46,12 +46,13 @@ export function useHosting(): void {
   }, [])
 }
 
-function useCountdown(expiresAt: number | undefined): string {
+function useCountdown(expiresAt: number | null | undefined): string {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(t)
   }, [])
+  if (expiresAt === null) return 'paused'
   if (!expiresAt) return '--:--'
   const s = Math.max(0, Math.round((expiresAt - now) / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -169,7 +170,7 @@ export function ShowCode() {
 
       <div class="waiting muted">
         <span class="dot-live" aria-hidden="true" />
-        Waiting for the other device · expires in {countdown}
+        {h.expiresAt === null ? 'Someone is connecting… the code stays until they finish' : `Waiting for the other device · expires in ${countdown}`}
       </div>
     </>
   )

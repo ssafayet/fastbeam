@@ -29,6 +29,10 @@ export interface PeerLink {
   readonly chunkSize: number
   /** When true this side issues ICE restarts; set by the session once both device IDs are known. */
   restartsIce: boolean
+  /** Device id once a hello exchange has registered this link with a peer; null while being introduced. */
+  attachedTo: string | null
+  /** The introduction currently running on this link, so a second room neither repeats nor interrupts it. */
+  introducing: Promise<unknown> | null
   sendControl(msg: ControlMessage): void
   sendChunk(frame: ArrayBuffer): void
   onControl: ((msg: ControlMessage) => void) | null
@@ -53,7 +57,38 @@ export function sdpFingerprint(sdp: string | undefined | null): string | null {
   return m?.[1]?.toUpperCase() ?? null
 }
 
+/** Register `work` as the introduction running on `link`; clears itself when done either way. */
+export function runIntroduction<T>(link: PeerLink, work: (previous: Promise<unknown> | null) => Promise<T>): Promise<T> {
+  const previous = link.introducing
+  const p = work(previous)
+  link.introducing = p
+  p.then(
+    () => {
+      if (link.introducing === p) link.introducing = null
+    },
+    () => {
+      if (link.introducing === p) link.introducing = null
+    },
+  )
+  return p
+}
+
+/** The live link already created on this connection, if any. */
+export function linkForPc(pc: RTCPeerConnection): PeerLink | null {
+  const set = linksByPc.get(pc)
+  if (!set) return null
+  for (const l of set) return l
+  return null
+}
+
+/**
+ * One link per connection. Trystero hands the same RTCPeerConnection to every room a peer shares with us,
+ * and a second negotiated channel with the same id is refused by the browser, so a second room reuses
+ * the existing link and runs its own introduction over it.
+ */
 export function createPeerLink(pc: RTCPeerConnection): PeerLink {
+  const shared = linkForPc(pc)
+  if (shared) return shared
   const dc = pc.createDataChannel(CHANNEL_LABEL, { negotiated: true, id: CHANNEL_ID, ordered: true })
   dc.binaryType = 'arraybuffer'
   dc.bufferedAmountLowThreshold = BUFFER_LOW
@@ -79,6 +114,8 @@ export function createPeerLink(pc: RTCPeerConnection): PeerLink {
     pc,
     ready,
     restartsIce: false,
+    attachedTo: null,
+    introducing: null,
     get onControl() {
       return controlHandler
     },

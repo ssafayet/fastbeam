@@ -175,7 +175,7 @@ export async function attachPeer(link: PeerLink, hello: HelloMessage, flags: Att
         paired: existing.paired || flags.paired,
         passwordVerified: existing.passwordVerified || flags.passwordVerified,
         verificationCode: existing.links.length ? existing.verificationCode : code,
-        links: [...existing.links.filter((l) => l.open), link],
+        links: [...existing.links.filter((l) => l.open && l !== link), link],
         lastSeen: Date.now(),
         online: true,
         goneAt: null,
@@ -199,8 +199,10 @@ export async function attachPeer(link: PeerLink, hello: HelloMessage, flags: Att
         goneAt: null,
       }
   setPeer(peer)
+  const rebound = link.attachedTo === id
+  link.attachedTo = id
   if (!existing) toast(`${peer.name} joined`)
-  L.info(existing ? `extra link to ${peer.name}` : `peer attached: ${peer.name}`, {
+  L.info(rebound ? `${peer.name}: link re-introduced (now paired: ${peer.paired})` : existing ? `extra link to ${peer.name}` : `peer attached: ${peer.name}`, {
     links: peer.links.length,
     paired: peer.paired,
     locked: peer.passwordVerified,
@@ -237,6 +239,7 @@ export async function attachPeer(link: PeerLink, hello: HelloMessage, flags: Att
     armStale()
   }
 
+  if (rebound) return peer // handlers and timers are already wired to this peer
   clearLinkTimers(link)
   linkTimers.set(link, {
     ping: window.setInterval(() => link.sendControl({ type: 'ping' }), PING_INTERVAL_MS),

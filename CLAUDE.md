@@ -86,6 +86,16 @@ All five milestones are built in one pass (user's call on Oct 7, 2026). Remainin
 - Chrome can deliver frames queued for a late-created negotiated channel *before* its "open" event. `PeerLink`
   therefore buffers control frames until the first `onControl` handler is attached and flushes them into it.
   Rule: the first handler attached to a fresh link must be the real waiter (`waitForControl`), never a debug tap.
+- Trystero hands the *same* RTCPeerConnection to every room a peer shares with us (discovery v4/v6 and code
+  rooms), and Chrome refuses a second negotiated channel with id 42 on one connection. `createPeerLink`
+  therefore returns the existing link for a connection, and introductions are serialised per link with
+  `runIntroduction`: discovery skips a link that is attached or being introduced; a code-room introduction
+  waits for a running one, then runs its handshake over the attached link (`attachPeer` re-binds it and
+  upgrades `paired`/`passwordVerified`). Never close a shared link on a refusal or cancel (`attachedTo`).
+- When a link's channel dies, the link closes the whole RTCPeerConnection once no other link uses it and
+  fires a synthetic `connectionstatechange`, so Trystero drops the peer and re-handshakes (PR #1). A
+  self-tab keeps the transport (`keepTransport`) or the two tabs reconnect forever.
+- The host's code expiry pauses while a joiner is connecting and resumes if they drop before pairing.
 - Status console (desktop header button, Ctrl/⌘ + `): `state/log.ts` ring buffer; `logger('scope')` in net,
   pairing, transfer and boot code. Use it first when discovery or pairing misbehaves.
 - Browsers cannot dial a peer by IP: every new WebRTC connection needs an SDP exchange through signaling.

@@ -6,7 +6,7 @@ import { nat } from '../state/network'
 
 const L = logger('discover')
 import { roomId } from './hash'
-import { createPeerLink } from './peerLink'
+import { createPeerLink, runIntroduction } from './peerLink'
 import { introduceDiscovery } from './session'
 import { trysteroSignaling, type RoomHandle } from './signaling'
 import { stunProbe, type ProbeResult } from './stunProbe'
@@ -31,7 +31,11 @@ function joinDiscoveryRoom(id: string): RoomHandle {
     onPeer(peerId, pc) {
       L.info(`peer connected in ${id.slice(0, 8)}`, { peerId: peerId.slice(0, 8), ice: pc.iceConnectionState })
       const link = createPeerLink(pc)
-      introduceDiscovery(link).catch((err: unknown) => {
+      if (link.attachedTo || link.introducing) {
+        L.debug(`${peerId.slice(0, 8)} is already ${link.attachedTo ? 'attached' : 'being introduced'} on a shared connection; skipping`)
+        return
+      }
+      runIntroduction(link, () => introduceDiscovery(link)).catch((err: unknown) => {
         L.warn(`introduction failed for ${peerId.slice(0, 8)}`, err)
         link.close()
       })
