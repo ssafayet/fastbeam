@@ -37,8 +37,15 @@ export interface PeerLink {
   onHealth: ((health: LinkHealth) => void) | null
   onClose: (() => void) | null
   fingerprints(): Fingerprints | null
-  close(): void
+  /**
+   * End the link. The RTCPeerConnection is closed too once no other link uses it, so Trystero drops it and
+   * re-handshakes; otherwise it never offers that peer again. `keepTransport` leaves the connection idle.
+   */
+  close(opts?: { keepTransport?: boolean }): void
 }
+
+/** Live links per connection: Trystero shares one connection across rooms (v4 and v6 discovery). */
+const linksByPc = new WeakMap<RTCPeerConnection, Set<PeerLink>>()
 
 export function sdpFingerprint(sdp: string | undefined | null): string | null {
   if (!sdp) return null
@@ -117,16 +124,8 @@ export function createPeerLink(pc: RTCPeerConnection): PeerLink {
       const remote = sdpFingerprint(pc.remoteDescription?.sdp)
       return local && remote ? { local, remote } : null
     },
-    close() {
-      if (closed) return
-      closed = true
-      clearIceTimers()
-      try {
-        dc.close()
-      } catch {
-        /* already closed */
-      }
-      link.onClose?.()
+    close(opts) {
+      end(!opts?.keepTransport)
     },
   }
 
@@ -154,14 +153,31 @@ export function createPeerLink(pc: RTCPeerConnection): PeerLink {
     }
   }
   dc.onbufferedamountlow = () => link.onBufferedAmountLow?.()
-  const onGone = () => {
+  const live = linksByPc.get(pc) ?? new Set<PeerLink>()
+  linksByPc.set(pc, live)
+  live.add(link)
+
+  const end = (releasePc: boolean) => {
     rejectReady?.(new Error('link closed'))
+    if (closed) return
+    closed = true
     clearIceTimers()
-    if (!closed) {
-      closed = true
-      link.onClose?.()
+    live.delete(link)
+    if (releasePc) {
+      try {
+        dc.close()
+      } catch {
+        /* already closed */
+      }
+      if (live.size === 0 && pc.signalingState !== 'closed') {
+        pc.close()
+        // pc.close() fires no event, and Trystero only re-reads the state on one.
+        pc.dispatchEvent(new Event('connectionstatechange'))
+      }
     }
+    link.onClose?.()
   }
+  const onGone = () => end(true)
   dc.onclose = onGone
   dc.onerror = () => {
     if (dc.readyState === 'closed' || dc.readyState === 'closing') onGone()

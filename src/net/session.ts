@@ -146,8 +146,8 @@ function refreshOnline(id: string): void {
 /** Register a peer once hellos have been exchanged on `link`. Safe to call for a second link to the same device. */
 export async function attachPeer(link: PeerLink, hello: HelloMessage, flags: AttachFlags): Promise<Peer> {
   if (hello.deviceId === deviceId.value) {
-    // Another tab of ours on the same network: ignore it.
-    link.close()
+    // Another tab of ours on the same network: ignore it, but keep the connection or the tabs reconnect forever.
+    link.close({ keepTransport: true })
     throw new Error('self')
   }
   const fps = link.fingerprints()
