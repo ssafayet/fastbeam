@@ -47,10 +47,21 @@ src/
     manager.ts        one incoming + one outgoing at a time, busy/decline, wake lock, beforeunload
     sinks/            fsAccess (Chromium desktop) → swStream (Chrome Android, Firefox) → opfs (Safari/iOS and
                       anything with OPFS sync handles: private storage + disk-backed Save) → blob (last resort)
-  state/              signals: storage, identity, settings, names, device, network, router, toast, peers, ui
+  media/
+    thumbs.ts         requestThumbnail: on-screen queue, LRU of small object URLs (held ones never evicted),
+                      icon for good after 2 strikes (a worker died on it, a video stalled); other transient
+                      misses are not cached
+    shrinkWorker.ts   the worker's client: silence watchdog, respawn, blames only the job the worker said it
+                      `started`; after 3 deaths rests 60 s (icons, never a main-thread decode), or shrinks on
+                      the main thread if no worker ever started a job
+    thumb.worker.ts   EXIF preview or scaled decode → 128 px WebP, one decode at a time
+    exifThumb.ts      finds the camera's embedded JPEG preview and orientation
+    square.ts         drawSquare: the centred, upright square crop both threads draw
+  state/              signals: storage, identity, settings, names, device, network, router, toast, peers, ui,
+                      media (viewer + mediaItem: one ViewerItem per File / SavedFile)
   ui/                 tokens.css, base.css, components.css, screens.css, overlays.css
   ui/components/      Icons, Controls, Header, EditableName, Toasts, Sheet+Tabs, Tile, CodeBoxes, QrCode,
-                      Scanner, IncomingDialog, TextReceivedDialog, PairPanel (desktop)
+                      Scanner, IncomingDialog, TextReceivedDialog, PairPanel (desktop), MediaViewer, Thumb
   ui/sheets/          SendSheet (3), PairSheet (7 + 8)
   ui/screens/         Home (1, 2, 13), Settings (12), Pairing (9, 10, 11), Transfer (5, 6)
 e2e/                  Playwright: smoke.spec (UI), network.spec (two tabs discover, transfer, password pairing)
