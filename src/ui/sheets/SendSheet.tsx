@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { TEXT_MAX } from '../../config'
 import { device } from '../../state/identity'
-import { itemsFromFiles, mediaKind, openViewer } from '../../state/media'
-import { Thumb } from '../components/MediaViewer'
+import { itemsFromFiles, mediaItem, openViewer } from '../../state/media'
+import { Thumb } from '../components/Thumb'
 import { getPeer, peerSubtitle, primaryLink } from '../../state/peers'
 import { toast } from '../../state/toast'
 import { closeSheet, pendingFiles, pendingText, type SendTab } from '../../state/ui'
@@ -17,9 +17,6 @@ const TABS = [
   { value: 'files', label: 'Files' },
   { value: 'text', label: 'Text or link' },
 ] as const
-
-/** Decoding a multi-MB photo or video just for a 40 px thumbnail stalls phones; bigger files get an icon. */
-const THUMB_MAX_BYTES = 30 * 1024 * 1024
 
 function fileIcon(f: File) {
   if (f.type.startsWith('image/')) return <ImageIcon />
@@ -76,10 +73,6 @@ export function SendSheet({ peerId, tab: initialTab }: { peerId: string; tab: Se
   useEffect(() => {
     if (!peer) closeSheet()
   }, [peer])
-
-  // One stable viewer item per file. Building them inline in the render gave Thumb a new item every
-  // render, so it re-created the blob URL and re-decoded the whole picked file on each re-render.
-  const items = useMemo(() => new Map(files.map((f) => [f, itemsFromFiles([f])[0]] as const)), [files])
 
   if (!peer) return null
   const total = files.reduce((n, f) => n + f.size, 0)
@@ -163,32 +156,36 @@ export function SendSheet({ peerId, tab: initialTab }: { peerId: string; tab: Se
               <div class="selected-empty muted">Nothing yet. Pick files above, drop them here, or paste.</div>
             ) : (
               <ul class="selected-list">
-                {files.map((f, i) => (
-                  <li key={fileKey(f)} class="selected-item">
-                    {items.get(f) && f.size <= THUMB_MAX_BYTES ? (
-                      <button
-                        type="button"
-                        class="thumb-btn"
-                        aria-label={`Preview ${f.name}`}
-                        onClick={() => {
-                          const all = itemsFromFiles(files)
-                          openViewer(all, Math.max(0, all.findIndex((it) => it.name === f.name && it.size === f.size)))
-                        }}
-                      >
-                        <Thumb item={items.get(f)!} size={40} />
-                      </button>
-                    ) : (
-                      <span class="selected-icon">{fileIcon(f)}</span>
-                    )}
-                    <span class="selected-text">
-                      <span class="selected-name">{f.name}</span>
-                      <span class="row-sub">{formatBytes(f.size)}</span>
-                    </span>
-                    <IconButton label={`Remove ${f.name}`} onClick={() => setFiles((cur) => cur.filter((_, j) => j !== i))}>
-                      <CloseIcon size={18} />
-                    </IconButton>
-                  </li>
-                ))}
+                {files.map((f, i) => {
+                  // Same File, same item (see mediaItem), so a re-render never re-decodes a thumbnail.
+                  const item = mediaItem(f)
+                  return (
+                    <li key={fileKey(f)} class="selected-item">
+                      {item ? (
+                        <button
+                          type="button"
+                          class="thumb-btn"
+                          aria-label={`Preview ${f.name}`}
+                          onClick={() => {
+                            const all = itemsFromFiles(files)
+                            openViewer(all, all.indexOf(item))
+                          }}
+                        >
+                          <Thumb item={item} size={40} />
+                        </button>
+                      ) : (
+                        <span class="selected-icon">{fileIcon(f)}</span>
+                      )}
+                      <span class="selected-text">
+                        <span class="selected-name">{f.name}</span>
+                        <span class="row-sub">{formatBytes(f.size)}</span>
+                      </span>
+                      <IconButton label={`Remove ${f.name}`} onClick={() => setFiles((cur) => cur.filter((_, j) => j !== i))}>
+                        <CloseIcon size={18} />
+                      </IconButton>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>

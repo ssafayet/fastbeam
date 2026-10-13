@@ -1997,10 +1997,17 @@ dialog::backdrop {
   background: var(--chip);
 }
 
-.thumb--empty {
-  display: block;
+.thumb--empty,
+.thumb--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 10px;
   background: var(--tint);
+}
+
+.thumb--icon {
+  color: var(--link);
 }
 
 .thumb-btn {

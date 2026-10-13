@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { mediaKind, openViewer, type ViewerItem } from '../../state/media'
+import { mediaItem, openViewer, type ViewerItem } from '../../state/media'
 import { getPeer } from '../../state/peers'
 import { openSendSheet } from '../../state/ui'
 import { clearIncoming, clearOutgoing, incoming, outgoing } from '../../transfer/manager'
@@ -8,14 +8,17 @@ import type { SavedFile } from '../../transfer/sinks'
 import { AutoAcceptRow } from '../components/AutoAcceptRow'
 import { Button, IconButton } from '../components/Controls'
 import { CheckIcon, CloseIcon, ImageIcon, ShieldPlainIcon } from '../components/Icons'
-import { Thumb } from '../components/MediaViewer'
+import { Thumb } from '../components/Thumb'
 
-/** Media the receiver can still read back, as gallery items, keyed by file index. */
+/**
+ * Media the receiver can still read back, as gallery items, keyed by file index. Rebuilt every render,
+ * but each saved file maps to the same item every time, so thumbnails come from cache.
+ */
 function galleryFrom(saved: SavedFile[]): Map<number, ViewerItem> {
   const out = new Map<number, ViewerItem>()
   saved.forEach((s, i) => {
-    const kind = mediaKind(s.type, s.name)
-    if (kind && s.blob) out.set(i, { name: s.name, size: s.size, type: s.type, kind, blob: s.blob })
+    const item = mediaItem(s)
+    if (item) out.set(i, item)
   })
   return out
 }
