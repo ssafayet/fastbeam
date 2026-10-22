@@ -14,6 +14,7 @@ The handoff lives in `fastbeam-handoff/` (gitignored, local only). Read in this 
 - Work milestone by milestone (spec "Milestones and acceptance" as amended by build-notes §7). Plan, get an OK, build, ship to Pages, stop for two-device testing.
 - Product name is always lowercase `fastbeam`. `APP_SALT = "fastbeam/v1"`, Trystero `appId: "fastbeam.app"`.
 - Fonts are self-hosted via `@fontsource`; nothing is requested from Google or any third party at runtime.
+- One opt-in exception: "advanced BDIX discovery" (off by default) fetches `BDIX_IP_URL` (our own PHP page, `server/bdix-ip.php`, on a BDIX host). Nothing is requested while it is off.
 
 ## Commands
 - `npm run dev` / `npm run build` / `npm run preview`
@@ -32,6 +33,7 @@ src/
   net/
     hash.ts           sha256, base32, base64url, roomId(kind, key)
     stunProbe.ts      public IPv4 / IPv6 prefix / NAT kind
+    bdix.ts           opt-in lookup of the IP the BDIX host sees us from (extra `bdix` discovery room)
     signaling.ts      Signaling interface + Trystero (Nostr) adapter
     peerLink.ts       negotiated data channel id 42: control JSON + binary frames, fingerprints
     session.ts        hello/ping, peer registry wiring, control routing to transfer manager
@@ -60,12 +62,13 @@ src/
   state/              signals: storage, identity, settings, names, device, network, router, toast, peers, ui,
                       media (viewer + mediaItem: one ViewerItem per File / SavedFile)
   ui/                 tokens.css, base.css, components.css, screens.css, overlays.css
-  ui/components/      Icons, Controls, Header, EditableName, Toasts, Sheet+Tabs, Tile, CodeBoxes, QrCode,
+  ui/components/      BdixToggle (opt-in switch + info), Icons, Controls, Header, EditableName, Toasts, Sheet+Tabs, Tile, CodeBoxes, QrCode,
                       Scanner, IncomingDialog, TextReceivedDialog, PairPanel (desktop), MediaViewer, Thumb
   ui/sheets/          SendSheet (3), PairSheet (7 + 8)
   ui/screens/         Home (1, 2, 13), Settings (12), Pairing (9, 10, 11), Transfer (5, 6)
 e2e/                  Playwright: smoke.spec (UI), network.spec (two tabs discover, transfer, password pairing)
 scripts/icons.mjs     icon generator
+server/bdix-ip.php    the BDIX endpoint (echoes REMOTE_ADDR as JSON, CORS for fastbeam.app); uploaded by hand, not deployed by CI
 public/               CNAME, icons, robots.txt
 .github/workflows/    Pages deploy on push to main
 ```

@@ -967,6 +967,20 @@
   display: inline-flex;
 }
 
+.bdix {
+  gap: 8px;
+}
+
+.bdix-info {
+  color: var(--muted);
+  flex: none;
+}
+
+.bdix-explain {
+  margin: 0;
+  line-height: 1.45;
+}
+
 .waiting {
   margin-top: auto;
   display: flex;

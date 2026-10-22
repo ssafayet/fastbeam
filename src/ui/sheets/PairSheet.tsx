@@ -18,6 +18,7 @@ import type { Peer } from '../../state/peers'
 import { Button, IconButton, Switch } from '../components/Controls'
 import { CodeBoxes } from '../components/CodeBoxes'
 import { BackIcon, CopyIcon, LockIcon, PasteIcon, ShareIcon } from '../components/Icons'
+import { BdixToggle } from '../components/BdixToggle'
 import { QrCode } from '../components/QrCode'
 import { Scanner } from '../components/Scanner'
 import { Tabs } from '../components/Sheet'
@@ -167,6 +168,8 @@ export function ShowCode() {
           </div>
         )}
       </section>
+
+      <BdixToggle />
 
       <div class="waiting muted">
         <span class="dot-live" aria-hidden="true" />

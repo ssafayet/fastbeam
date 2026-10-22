@@ -21,6 +21,10 @@ export const RELAY_REDUNDANCY = 4
 /** CORS-enabled public IP lookup used only when STUN yields no reflexive candidate (UDP blocked). */
 export const IP_LOOKUP_URL = 'https://api64.ipify.org?format=json'
 
+/** Opt-in "advanced BDIX discovery": a tiny PHP page on a BDIX host that echoes the IP it sees us from. See server/bdix-ip.php. */
+export const BDIX_IP_URL = 'https://bdix-discovery.fastbeam.app/'
+export const BDIX_LOOKUP_MS = 1_500
+
 /** Pairing codes never use 0, O, 1, I or L. */
 export const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
 export const CODE_LENGTH = 6
