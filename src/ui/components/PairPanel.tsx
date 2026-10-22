@@ -91,7 +91,7 @@ export function PairPanel() {
         </button>
       </div>
       <div class="rule" />
-      <BdixToggle />
+      <BdixToggle flat />
     </aside>
   )
 }
