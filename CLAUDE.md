@@ -33,6 +33,7 @@ src/
     hash.ts           sha256, base32, base64url, roomId(kind, key)
     stunProbe.ts      public IPv4 / IPv6 prefix / NAT kind
     signaling.ts      Signaling interface + Trystero (Nostr) adapter
+    relays.ts         relay socket watchdog: reconnects "open" sockets that have gone silent, logs relay health
     peerLink.ts       negotiated data channel id 42: control JSON + binary frames, fingerprints
     session.ts        hello/ping, peer registry wiring, control routing to transfer manager
     discovery.ts      probe → rooms → join; re-discovery on online/connection/visibility
@@ -115,6 +116,13 @@ All five milestones are built in one pass (user's call on Oct 7, 2026). Remainin
   host message (`auth-required` / `pair-open` / `code-expired`) claims the join and stops the join timers.
   Trystero's "could not connect after exchanging SDP" is often spurious with shared connections; the joiner
   gives it a 3 s grace.
+- Relays: `RELAY_URLS` in config is a hand-tested set. Trystero's default picks 4 relays by hashing the app id
+  and two of ours died (Oct 2026). Trystero caches one socket per relay for the page's life and only reconnects
+  on "close", so re-joining rooms does not fix a zombie socket. While discovery or a host code room is up,
+  `relays.ts` closes open sockets silent for 150 s (every announce draws an OK; a "rate-limited:" reply allows
+  15 min, Trystero's longest backoff). `reconnectRelays` closes all of them on online / network change and
+  when rooms are rejoined after a long background spell or a dead link.
+  Re-test with a pub/sub round trip and a burst before changing the list.
 - Status console (desktop header button, Ctrl/⌘ + `): `state/log.ts` ring buffer; `logger('scope')` in net,
   pairing, transfer and boot code. Use it first when discovery or pairing misbehaves.
 - Browsers cannot dial a peer by IP: every new WebRTC connection needs an SDP exchange through signaling.

@@ -42,6 +42,15 @@ export const RELAY_URLS: string[] | undefined = [
   'wss://nostr.red5d.dev',
 ]
 export const RELAY_REDUNDANCY = 4
+/** How often the relay watchdog looks at the sockets. */
+export const RELAY_CHECK_MS = 30_000
+/**
+ * Every announce (one per room per minute) draws an OK from the relay, so an open socket that has heard
+ * nothing for this long is dead and is reconnected.
+ */
+export const RELAY_QUIET_MS = 150_000
+/** Trystero's longest announce backoff for a relay that says "rate-limited:" (its maxRelayBackoffMs). */
+export const RELAY_BACKOFF_MAX_MS = 900_000
 
 /** CORS-enabled public IP lookup used only when STUN yields no reflexive candidate (UDP blocked). */
 export const IP_LOOKUP_URL = 'https://api64.ipify.org?format=json'
