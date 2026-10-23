@@ -65,11 +65,12 @@ export const CLOCK_CORRECT_MIN_MS = 2_000
 export const CLOCK_MAX_RTT_MS = 10_000
 /**
  * Akamai's public time service: generated per request, never cached, millisecond precision, CORS for any
- * origin (dash.js uses it for the same job). Our own server's Date header is the fallback when it cannot
- * be reached, e.g. on a network that blocks unfamiliar hosts.
+ * origin (dash.js uses it for the same job). When it cannot be reached (a network that blocks unfamiliar
+ * hosts) signaling uses the device's own clock. Our server's Date header is deliberately not used: it comes
+ * through GitHub Pages' CDN, and whether it is fresh depends on the CDN's configuration.
  */
 export const CLOCK_TIME_URL = 'https://time.akamai.com/?iso&ms'
-/** Give up on the time service after this long and fall back, so a host that drops packets costs little. */
+/** Give up on the time service after this long, so a host that drops packets costs little. */
 export const CLOCK_TIME_TIMEOUT_MS = 4_000
 /** How often the wall clock is compared with the monotonic one to notice a clock change or a sleep. */
 export const CLOCK_CHECK_MS = 30_000

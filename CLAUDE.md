@@ -34,7 +34,7 @@ src/
     stunProbe.ts      public IPv4 / IPv6 prefix / NAT kind
     signaling.ts      Signaling interface + Trystero (Nostr) adapter
     relays.ts         relay socket watchdog: reconnects "open" sockets that have gone silent, logs relay health
-    clock.ts          measures the clock offset (Akamai time, else our server's Date); patched Trystero uses it
+    clock.ts          measures the clock offset from Akamai's time service; the patched Trystero uses it
     peerLink.ts       negotiated data channel id 42: control JSON + binary frames, fingerprints
     session.ts        hello/ping, peer registry wiring, control routing to transfer manager
     discovery.ts      probe → rooms → join; re-discovery on online/connection/visibility
@@ -129,9 +129,9 @@ All five milestones are built in one pass (user's call on Oct 7, 2026). Remainin
   subscription's `since` (listener's clock). A device whose clock ran ahead (Windows drifts by tens of
   seconds) missed every reply to its first announces and met others only at Trystero's next one-minute
   announce. `clock.ts` measures the offset from Akamai's time service (`CLOCK_TIME_URL`: per request,
-  millisecond ISO, CORS for any origin) and falls back to a HEAD of `/robots.txt` (the CDN stamps Date on
-  delivery, even from its cache) when Akamai is blocked or down. At 2 s or more it sets
-  `globalThis.__fastbeamClockOffsetMs` and reconnects the relays. It measures again (with retries) when the wall clock moves against `performance.now()` (the clock
+  millisecond ISO, CORS for any origin); when it is blocked or down the device's own clock is used. Our
+  server's Date header is deliberately not a fallback: its freshness depends on the CDN's configuration.
+  At 2 s or more it sets `globalThis.__fastbeamClockOffsetMs` and reconnects the relays. It measures again (with retries) when the wall clock moves against `performance.now()` (the clock
   was changed or the machine slept) and on "online", since a skewed clock tends to get snapped back while
   the tab is open; `patches/@trystero-p2p+nostr+*.patch`
   makes Trystero's `now()` use it and look back 15 s. Don't widen that look-back: primal, nos.lol and
