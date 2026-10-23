@@ -52,6 +52,14 @@ export const RELAY_QUIET_MS = 150_000
 /** Trystero's longest announce backoff for a relay that says "rate-limited:" (its maxRelayBackoffMs). */
 export const RELAY_BACKOFF_MAX_MS = 900_000
 
+/**
+ * A clock off by at least this much is corrected for signaling. The server's Date header has whole seconds,
+ * so smaller offsets are measurement noise; the patched Trystero's 15 s look-back covers what is left.
+ */
+export const CLOCK_CORRECT_MIN_MS = 2_000
+/** A clock measurement whose round trip took longer than this is too loose to trust. */
+export const CLOCK_MAX_RTT_MS = 3_000
+
 /** CORS-enabled public IP lookup used only when STUN yields no reflexive candidate (UDP blocked). */
 export const IP_LOOKUP_URL = 'https://api64.ipify.org?format=json'
 

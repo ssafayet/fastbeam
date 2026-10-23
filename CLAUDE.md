@@ -34,6 +34,7 @@ src/
     stunProbe.ts      public IPv4 / IPv6 prefix / NAT kind
     signaling.ts      Signaling interface + Trystero (Nostr) adapter
     relays.ts         relay socket watchdog: reconnects "open" sockets that have gone silent, logs relay health
+    clock.ts          measures the clock offset from the server Date header; the patched Trystero signals with it
     peerLink.ts       negotiated data channel id 42: control JSON + binary frames, fingerprints
     session.ts        hello/ping, peer registry wiring, control routing to transfer manager
     discovery.ts      probe → rooms → join; re-discovery on online/connection/visibility
@@ -67,6 +68,7 @@ src/
   ui/screens/         Home (1, 2, 13), Settings (12), Pairing (9, 10, 11), Transfer (5, 6)
 e2e/                  Playwright: smoke.spec (UI), network.spec (two tabs discover, transfer, password pairing)
 scripts/icons.mjs     icon generator
+patches/              patch-package (postinstall): Trystero Nostr uses the corrected clock, looks back 15 s
 public/               CNAME, icons, robots.txt
 .github/workflows/    Pages deploy on push to main
 ```
@@ -123,6 +125,14 @@ All five milestones are built in one pass (user's call on Oct 7, 2026). Remainin
   15 min, Trystero's longest backoff). `reconnectRelays` closes all of them on online / network change and
   when rooms are rejoined after a long background spell or a dead link.
   Re-test with a pub/sub round trip and a burst before changing the list.
+- Clock skew: relays forward an event only if its timestamp (sender's clock) is not older than the
+  subscription's `since` (listener's clock). A device whose clock ran ahead (Windows drifts by tens of
+  seconds) missed every reply to its first announces and met others only at Trystero's next one-minute
+  announce. `clock.ts` measures the offset with a HEAD of `/robots.txt` and, at 2 s or more, sets
+  `globalThis.__fastbeamClockOffsetMs` and reconnects the relays; `patches/@trystero-p2p+nostr+*.patch`
+  makes Trystero's `now()` use it and look back 15 s. Don't widen that look-back: primal, nos.lol and
+  relay.nostr.net store ephemeral events and would replay old announcements. Upgrading Trystero means
+  re-making the patch; `clock.test.ts` fails if it is missing.
 - Status console (desktop header button, Ctrl/⌘ + `): `state/log.ts` ring buffer; `logger('scope')` in net,
   pairing, transfer and boot code. Use it first when discovery or pairing misbehaves.
 - Browsers cannot dial a peer by IP: every new WebRTC connection needs an SDP exchange through signaling.
