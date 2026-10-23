@@ -128,8 +128,11 @@ All five milestones are built in one pass (user's call on Oct 7, 2026). Remainin
 - Clock skew: relays forward an event only if its timestamp (sender's clock) is not older than the
   subscription's `since` (listener's clock). A device whose clock ran ahead (Windows drifts by tens of
   seconds) missed every reply to its first announces and met others only at Trystero's next one-minute
-  announce. `clock.ts` measures the offset with a HEAD of `/robots.txt` and, at 2 s or more, sets
-  `globalThis.__fastbeamClockOffsetMs` and reconnects the relays; `patches/@trystero-p2p+nostr+*.patch`
+  announce. `clock.ts` measures the offset with a HEAD of `/robots.txt` (the CDN stamps Date on delivery,
+  even from its cache) and, at 2 s or more, sets `globalThis.__fastbeamClockOffsetMs` and reconnects the
+  relays. It measures again (with retries) when the wall clock moves against `performance.now()` (the clock
+  was changed or the machine slept) and on "online", since a skewed clock tends to get snapped back while
+  the tab is open; `patches/@trystero-p2p+nostr+*.patch`
   makes Trystero's `now()` use it and look back 15 s. Don't widen that look-back: primal, nos.lol and
   relay.nostr.net store ephemeral events and would replay old announcements. Upgrading Trystero means
   re-making the patch; `clock.test.ts` fails if it is missing.

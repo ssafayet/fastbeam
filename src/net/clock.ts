@@ -7,8 +7,12 @@
  * announce; one that lags is not heard right after others subscribe. Windows clocks drift by tens of
  * seconds. We measure this device's offset against our own server's Date header and hand it to the patched
  * Trystero (patches/@trystero-p2p+nostr+*.patch), which stamps and filters with the corrected time.
+ *
+ * The offset is measured at startup and again when the clock may have changed under us: a skewed clock is
+ * exactly the kind that gets snapped back, often on wake from sleep, and a stale correction would then put
+ * it just as far out the other way.
  */
-import { CLOCK_CORRECT_MIN_MS, CLOCK_MAX_RTT_MS } from '../config'
+import { CLOCK_CHECK_MS, CLOCK_CORRECT_MIN_MS, CLOCK_MAX_RTT_MS, CLOCK_RETRIES, CLOCK_RETRY_MS } from '../config'
 import { logger } from '../state/log'
 import { reconnectRelays } from './relays'
 
@@ -16,11 +20,17 @@ const L = logger('clock')
 
 type ClockGlobal = typeof globalThis & { __fastbeamClockOffsetMs?: number }
 
+/** The correction Trystero is using now (0 = none). */
+let applied = 0
+let measured = false
+let running: Promise<void> | null = null
+
 /** Server time minus this device's time in ms, or null when it cannot be measured well. */
 export async function measureClockOffset(): Promise<number | null> {
   try {
     const sent = Date.now()
-    // A file the service worker does not precache, with a fresh query so no cache answers for the server.
+    // Not precached by the service worker, and no-store keeps the browser cache out of it. The CDN in front
+    // of GitHub Pages may answer from its cache, but stamps Date when it delivers, so the time is fresh.
     const res = await fetch(`/robots.txt?clock=${sent}`, { method: 'HEAD', cache: 'no-store' })
     const received = Date.now()
     const header = res.headers.get('date')
@@ -33,23 +43,65 @@ export async function measureClockOffset(): Promise<number | null> {
   }
 }
 
-/**
- * Measure once at startup. A clock off by CLOCK_CORRECT_MIN_MS or more is corrected for signaling, and the
- * relays are reconnected so their subscriptions start again from the corrected time.
- */
-export async function syncSignalingClock(): Promise<void> {
+/** Measure and, if the correction moved by CLOCK_CORRECT_MIN_MS or more, apply it. False if unmeasurable. */
+export async function syncClock(reason: string): Promise<boolean> {
   const offset = await measureClockOffset()
   if (offset === null) {
-    L.debug('could not measure the clock; signaling uses it as is')
-    return
+    L.debug(`could not measure the clock (${reason})`)
+    return false
   }
+  const first = !measured
+  measured = true
+  const next = Math.abs(offset) >= CLOCK_CORRECT_MIN_MS ? offset : 0
   const seconds = Math.abs(offset / 1000).toFixed(1)
-  if (Math.abs(offset) < CLOCK_CORRECT_MIN_MS) {
-    L.info(`clock is within ${seconds} s of the server`)
-    return
+  if (Math.abs(next - applied) < CLOCK_CORRECT_MIN_MS) {
+    if (first) L.info(`clock is within ${seconds} s of the server`)
+    return true
   }
-  ;(globalThis as ClockGlobal).__fastbeamClockOffsetMs = offset
-  // A positive offset means the server is later than us, i.e. this device's clock is behind.
-  L.warn(`this device's clock is ${seconds} s ${offset > 0 ? 'behind' : 'ahead'}; signaling uses corrected time`)
-  reconnectRelays('clock corrected')
+  applied = next
+  const g = globalThis as ClockGlobal
+  if (next === 0) {
+    delete g.__fastbeamClockOffsetMs
+    L.info(`clock is right again (within ${seconds} s); correction removed (${reason})`)
+  } else {
+    g.__fastbeamClockOffsetMs = next
+    // A positive offset means the server is later than us, i.e. this device's clock is behind.
+    L.warn(`this device's clock is ${seconds} s ${next > 0 ? 'behind' : 'ahead'}; signaling uses corrected time (${reason})`)
+  }
+  // Subscriptions carry the old "since"; reconnecting makes Trystero resubscribe and re-announce.
+  reconnectRelays('clock correction changed')
+  return true
+}
+
+/** syncClock with a few retries; concurrent callers share one run. */
+function syncSoon(reason: string): Promise<void> {
+  running ??= (async () => {
+    for (let attempt = 0; attempt <= CLOCK_RETRIES; attempt++) {
+      if (attempt > 0) await new Promise((r) => window.setTimeout(r, CLOCK_RETRY_MS))
+      if (await syncClock(attempt > 0 ? `${reason}, retry ${attempt}` : reason)) return
+    }
+    L.warn(`could not measure the clock after ${CLOCK_RETRIES + 1} tries; signaling uses it as is`)
+  })().finally(() => {
+    running = null
+  })
+  return running
+}
+
+/**
+ * Measure now, and again when the wall clock moves against the monotonic one (the clock was changed, or
+ * the machine slept) or the browser comes back online. The check itself is local; only a detected change
+ * costs a request.
+ */
+export function initClockSync(): void {
+  const drift = () => Date.now() - performance.now()
+  let last = drift()
+  void syncSoon('startup')
+  window.setInterval(() => {
+    const now = drift()
+    if (Math.abs(now - last) < CLOCK_CORRECT_MIN_MS) return
+    L.debug(`wall clock moved ${Math.round((now - last) / 1000)} s against the monotonic clock`)
+    last = now
+    void syncSoon('clock changed or machine slept')
+  }, CLOCK_CHECK_MS)
+  window.addEventListener('online', () => void syncSoon('back online'))
 }

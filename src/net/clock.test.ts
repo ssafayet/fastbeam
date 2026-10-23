@@ -1,22 +1,36 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEvent, subscribe } from 'trystero/nostr'
 
 const reconnectRelays = vi.fn()
 vi.mock('./relays', () => ({ reconnectRelays }))
 
-const { measureClockOffset, syncSignalingClock } = await import('./clock')
-
+type ClockModule = typeof import('./clock')
 type ClockGlobal = typeof globalThis & { __fastbeamClockOffsetMs?: number }
+const offsetNow = () => (globalThis as ClockGlobal).__fastbeamClockOffsetMs
 
-/** A server whose Date header reads `serverMs` (truncated to whole seconds, like a real one). */
-function serverAt(serverMs: number) {
+let clock: ClockModule
+/** How far this device's clock runs ahead of the server's. */
+let ahead = 0
+let serverDown = false
+
+beforeEach(async () => {
+  vi.resetModules()
+  clock = await import('./clock')
+  ahead = 0
+  serverDown = false
+  // The server's Date header: true time, truncated to whole seconds like a real one.
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => new Response(null, { headers: { date: new Date(Math.floor(serverMs / 1000) * 1000).toUTCString() } })),
+    vi.fn(async () => {
+      if (serverDown) throw new TypeError('offline')
+      const date = new Date(Math.floor((Date.now() - ahead) / 1000) * 1000).toUTCString()
+      return new Response(null, { headers: { date } })
+    }),
   )
-}
+})
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   reconnectRelays.mockClear()
   delete (globalThis as ClockGlobal).__fastbeamClockOffsetMs
@@ -24,37 +38,80 @@ afterEach(() => {
 
 describe('measureClockOffset', () => {
   it('reports a clock running 40 s ahead as a negative offset, to within a second', async () => {
-    serverAt(Date.now() - 40_000)
-    const offset = await measureClockOffset()
-    expect(offset).not.toBeNull()
+    ahead = 40_000
+    const offset = await clock.measureClockOffset()
     expect(Math.abs(offset! + 40_000)).toBeLessThan(1_000)
   })
 
   it('gives up without a Date header or when the request fails', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(null)))
-    expect(await measureClockOffset()).toBeNull()
+    expect(await clock.measureClockOffset()).toBeNull()
+    serverDown = true
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))))
-    expect(await measureClockOffset()).toBeNull()
+    expect(await clock.measureClockOffset()).toBeNull()
   })
 })
 
-describe('syncSignalingClock', () => {
-  it('corrects a skewed clock and reconnects the relays', async () => {
-    serverAt(Date.now() + 30_000)
-    await syncSignalingClock()
-    expect((globalThis as ClockGlobal).__fastbeamClockOffsetMs).toBeGreaterThan(29_000)
+describe('syncClock', () => {
+  it('leaves a good clock alone', async () => {
+    await clock.syncClock('test')
+    expect(offsetNow()).toBeUndefined()
+    expect(reconnectRelays).not.toHaveBeenCalled()
+  })
+
+  it('corrects a skewed clock, and removes the correction once the clock is fixed', async () => {
+    ahead = -30_000
+    await clock.syncClock('test')
+    expect(offsetNow()).toBeGreaterThan(29_000)
+    expect(reconnectRelays).toHaveBeenCalledTimes(1)
+
+    ahead = 0
+    await clock.syncClock('test')
+    expect(offsetNow()).toBeUndefined()
+    expect(reconnectRelays).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not reconnect the relays for measurement noise', async () => {
+    ahead = -30_000
+    await clock.syncClock('test')
+    ahead = -30_800
+    await clock.syncClock('test')
+    expect(reconnectRelays).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('initClockSync', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'performance'] })
+  })
+
+  it('measures again when the wall clock jumps while the app is open', async () => {
+    clock.initClockSync()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(offsetNow()).toBeUndefined()
+
+    // The clock is set 45 s ahead (or slept and resynced); the monotonic clock does not move with it.
+    vi.setSystemTime(Date.now() + 45_000)
+    ahead = 45_000
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(offsetNow()).toBeLessThan(-44_000)
     expect(reconnectRelays).toHaveBeenCalledOnce()
   })
 
-  it('leaves a good clock alone', async () => {
-    serverAt(Date.now())
-    await syncSignalingClock()
-    expect((globalThis as ClockGlobal).__fastbeamClockOffsetMs).toBeUndefined()
-    expect(reconnectRelays).not.toHaveBeenCalled()
+  it('retries a measurement that failed at startup', async () => {
+    ahead = 60_000
+    serverDown = true
+    clock.initClockSync()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(offsetNow()).toBeUndefined()
+
+    serverDown = false
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(offsetNow()).toBeLessThan(-59_000)
   })
 })
 
-// Guards patches/@trystero-p2p+nostr+*.patch: if a reinstall drops it, these fail.
+// Guards patches/@trystero-p2p+nostr+*.patch: if a reinstall drops it, this fails.
 describe('patched Trystero signaling time', () => {
   it('stamps events and filters subscriptions with the corrected clock, looking back 15 s', async () => {
     ;(globalThis as ClockGlobal).__fastbeamClockOffsetMs = 120_000

@@ -57,8 +57,16 @@ export const RELAY_BACKOFF_MAX_MS = 900_000
  * so smaller offsets are measurement noise; the patched Trystero's 15 s look-back covers what is left.
  */
 export const CLOCK_CORRECT_MIN_MS = 2_000
-/** A clock measurement whose round trip took longer than this is too loose to trust. */
-export const CLOCK_MAX_RTT_MS = 3_000
+/**
+ * A clock measurement whose round trip took longer than this is too loose to trust. Its error is at most
+ * half the round trip, which stays inside the patched Trystero's 15 s look-back.
+ */
+export const CLOCK_MAX_RTT_MS = 10_000
+/** How often the wall clock is compared with the monotonic one to notice a clock change or a sleep. */
+export const CLOCK_CHECK_MS = 30_000
+/** A measurement that fails is retried this many times, this far apart. */
+export const CLOCK_RETRIES = 3
+export const CLOCK_RETRY_MS = 15_000
 
 /** CORS-enabled public IP lookup used only when STUN yields no reflexive candidate (UDP blocked). */
 export const IP_LOOKUP_URL = 'https://api64.ipify.org?format=json'
