@@ -5,10 +5,10 @@
  * not older than the subscription's "since" (the listener's clock). A device whose clock runs ahead never
  * hears the replies to its own first announces and only meets others at Trystero's next one-minute
  * announce; one that lags is not heard right after others subscribe. Windows clocks drift by tens of
- * seconds. We measure this device's offset against our own server's Date header and hand it to the patched
+ * seconds. We measure this device's offset against Akamai's time service and hand it to the patched
  * Trystero (patches/@trystero-p2p+nostr+*.patch), which stamps and filters with the corrected time.
- * The time comes from Akamai's time service. When it cannot be reached the device's own clock is used as
- * is: the patched Trystero still looks back 15 s, which covers ordinary drift.
+ * When the service cannot be reached the device's own clock is used as is: the patched Trystero still
+ * looks back 15 s, which covers ordinary drift.
  *
  * The offset is measured at startup and again when the clock may have changed under us: a skewed clock is
  * exactly the kind that gets snapped back, often on wake from sleep, and a stale correction would then put

@@ -17,7 +17,7 @@ const L = logger('relay')
 /** When each socket last heard anything; a rate-limited one is dated forward (see watchedSockets). */
 const lastHeard = new WeakMap<WebSocket, number>()
 
-/** Let Trystero connect before the first summary, so it does not just say "0/7". */
+/** Let Trystero connect before the first summary, so it does not just report every relay as down. */
 const FIRST_SUMMARY_MS = 8_000
 
 const relayHost = (url: string) => url.replace(/^wss?:\/\//, '').replace(/\/$/, '')

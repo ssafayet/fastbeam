@@ -43,8 +43,8 @@ export const RELAY_QUIET_MS = 150_000
 export const RELAY_BACKOFF_MAX_MS = 900_000
 
 /**
- * A clock off by at least this much is corrected for signaling. The server's Date header has whole seconds,
- * so smaller offsets are measurement noise; the patched Trystero's 15 s look-back covers what is left.
+ * A clock off by at least this much is corrected for signaling. Smaller offsets are within the noise of
+ * one measurement over the network, and the patched Trystero's 15 s look-back covers them anyway.
  */
 export const CLOCK_CORRECT_MIN_MS = 2_000
 /**
