@@ -9,21 +9,32 @@ type ClockGlobal = typeof globalThis & { __fastbeamClockOffsetMs?: number }
 const offsetNow = () => (globalThis as ClockGlobal).__fastbeamClockOffsetMs
 
 let clock: ClockModule
-/** How far this device's clock runs ahead of the server's. */
+/** How far this device's clock runs ahead of true time. */
 let ahead = 0
-let serverDown = false
+/** What each source does: answer with true time, fail, or (Akamai) answer with junk. */
+let akamai: 'up' | 'down' | 'junk' = 'up'
+let server: 'up' | 'down' = 'up'
+/** How far behind true time our server's Date header is (a cache serving a stale Date). */
+let serverLag = 0
 
 beforeEach(async () => {
   vi.resetModules()
   clock = await import('./clock')
   ahead = 0
-  serverDown = false
-  // The server's Date header: true time, truncated to whole seconds like a real one.
+  akamai = 'up'
+  server = 'up'
+  serverLag = 0
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => {
-      if (serverDown) throw new TypeError('offline')
-      const date = new Date(Math.floor((Date.now() - ahead) / 1000) * 1000).toUTCString()
+    vi.fn(async (url: string) => {
+      const truth = Date.now() - ahead
+      if (url.startsWith('https://time.akamai.com/')) {
+        if (akamai === 'down') throw new TypeError('blocked')
+        return new Response(akamai === 'junk' ? '<html>captive portal</html>' : new Date(truth).toISOString())
+      }
+      if (server === 'down') throw new TypeError('offline')
+      // Whole seconds, like a real Date header.
+      const date = new Date(Math.floor((truth - serverLag) / 1000) * 1000).toUTCString()
       return new Response(null, { headers: { date } })
     }),
   )
@@ -37,17 +48,33 @@ afterEach(() => {
 })
 
 describe('measureClockOffset', () => {
-  it('reports a clock running 40 s ahead as a negative offset, to within a second', async () => {
+  it('reads a clock running 40 s ahead from Akamai, to within a few ms', async () => {
     ahead = 40_000
-    const offset = await clock.measureClockOffset()
-    expect(Math.abs(offset! + 40_000)).toBeLessThan(1_000)
+    const reading = await clock.measureClockOffset()
+    expect(reading?.source).toBe('akamai')
+    expect(Math.abs(reading!.offsetMs + 40_000)).toBeLessThan(50)
   })
 
-  it('gives up without a Date header or when the request fails', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(null)))
-    expect(await clock.measureClockOffset()).toBeNull()
-    serverDown = true
-    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))))
+  it('prefers Akamai over a server Date a cache has left 5 minutes stale', async () => {
+    serverLag = 5 * 60_000
+    const reading = await clock.measureClockOffset()
+    expect(reading?.source).toBe('akamai')
+    expect(Math.abs(reading!.offsetMs)).toBeLessThan(50)
+  })
+
+  it('falls back to our server when Akamai is blocked or answers with junk', async () => {
+    ahead = 40_000
+    for (const state of ['down', 'junk'] as const) {
+      akamai = state
+      const reading = await clock.measureClockOffset()
+      expect(reading?.source).toBe('server')
+      expect(Math.abs(reading!.offsetMs + 40_000)).toBeLessThan(1_000)
+    }
+  })
+
+  it('gives up when neither can be reached', async () => {
+    akamai = 'down'
+    server = 'down'
     expect(await clock.measureClockOffset()).toBeNull()
   })
 })
@@ -100,12 +127,13 @@ describe('initClockSync', () => {
 
   it('retries a measurement that failed at startup', async () => {
     ahead = 60_000
-    serverDown = true
+    akamai = 'down'
+    server = 'down'
     clock.initClockSync()
     await vi.advanceTimersByTimeAsync(0)
     expect(offsetNow()).toBeUndefined()
 
-    serverDown = false
+    akamai = 'up'
     await vi.advanceTimersByTimeAsync(15_000)
     expect(offsetNow()).toBeLessThan(-59_000)
   })
