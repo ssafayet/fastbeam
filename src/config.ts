@@ -49,6 +49,8 @@ export const DISCONNECT_MASK_MS = 30_000
 export const STUN_PROBE_MS = 3_000
 export const PAIR_TIMEOUT_MS = 20_000
 export const PAIR_RETRY_MS = 10_000
+/** After a join error, how long a channel has to open before the join is given up. */
+export const JOIN_ERROR_GRACE_MS = 3_000
 export const CODE_TTL_MS = 10 * 60_000
 export const STILL_LOOKING_MS = 8_000
 export const REDISCOVER_HIDDEN_MS = 60_000
