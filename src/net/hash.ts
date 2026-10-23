@@ -67,7 +67,7 @@ export function concatBytes(...parts: Uint8Array[]): Uint8Array {
   return out
 }
 
-export type RoomKind = 'v4' | 'v6' | 'code'
+export type RoomKind = 'v4' | 'v6' | 'code' | 'bdix'
 
 /** Room IDs hash the key with the app salt so relays never see a raw IP or code. */
 export async function roomId(kind: RoomKind, key: string): Promise<string> {

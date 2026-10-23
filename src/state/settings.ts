@@ -11,6 +11,9 @@ export const deviceName = persisted<string>('name', randomName, isNonEmptyString
 /** When false this device still answers code pairing but hides from nearby lists. */
 export const discoverable = persisted<boolean>('discoverable', () => true, isBoolean)
 
+/** Opt-in: ask the BDIX host which IP it sees us from and meet devices under that address too. Off sends nothing. */
+export const bdixDiscovery = persisted<boolean>('bdix', () => false, isBoolean)
+
 export const theme = persisted<Theme>('theme', () => 'system', isTheme)
 
 export { NAME_MAX }

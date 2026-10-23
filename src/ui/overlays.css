@@ -967,6 +967,60 @@
   display: inline-flex;
 }
 
+.bdix {
+  gap: 10px;
+}
+
+.bdix--flat {
+  display: flex;
+  flex-direction: column;
+}
+
+.bdix-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bdix-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* A small glyph with a full-size touch target around it. */
+.bdix-info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
+  border-radius: 50%;
+}
+
+.bdix-info::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+
+.bdix-info:hover,
+.bdix-info[aria-expanded='true'] {
+  color: var(--link);
+}
+
+.bdix-explain {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--tint);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .waiting {
   margin-top: auto;
   display: flex;

@@ -3,6 +3,8 @@ import { signal } from '@preact/signals'
 import { REDISCOVER_HIDDEN_MS } from '../config'
 import { logger } from '../state/log'
 import { nat } from '../state/network'
+import { bdixDiscovery } from '../state/settings'
+import { lookupBdixIp } from './bdix'
 
 const L = logger('discover')
 import { roomId } from './hash'
@@ -19,8 +21,9 @@ export const lastProbe = signal<ProbeResult | null>(null)
 /** True once at least one discovery room is joined. */
 export const discovering = signal(false)
 
-async function roomIdsFor(p: ProbeResult): Promise<string[]> {
+async function roomIdsFor(p: ProbeResult, bdixIp?: string): Promise<string[]> {
   const ids: string[] = []
+  if (bdixIp) ids.push(await roomId('bdix', bdixIp))
   if (p.ipv4) ids.push(await roomId('v4', p.ipv4))
   if (p.ipv6Prefix) ids.push(await roomId('v6', p.ipv6Prefix))
   return ids
@@ -65,18 +68,22 @@ export function runDiscovery(opts: { announce?: boolean; reason?: string } = {})
     L.info(`STUN probe starting${opts.reason ? ` (${opts.reason})` : ''}`)
     const t0 = Date.now()
     let probe: ProbeResult
+    // Only when the user turned it on; in parallel, so it never lengthens the probe.
+    const bdix = bdixDiscovery.value ? lookupBdixIp() : Promise.resolve(undefined)
     try {
       probe = await stunProbe()
     } catch (err) {
       L.error('STUN probe threw', err)
       probe = { nat: 'unknown' }
     }
+    const bdixIp = await bdix
+    if (bdixDiscovery.value) L.info(bdixIp ? `BDIX host sees us as ${bdixIp}` : 'BDIX host unreachable; skipping that room', { stun: probe.ipv4 })
     lastProbe.value = probe
     nat.value = probe.nat
     probing.value = false
     L.info(`STUN probe done in ${Date.now() - t0} ms`, { nat: probe.nat, ipv4: probe.ipv4, ipv6Prefix: probe.ipv6Prefix })
 
-    const wanted = new Set(await roomIdsFor(probe))
+    const wanted = new Set(await roomIdsFor(probe, bdixIp))
     if (wanted.size === 0) L.warn('no network key: auto-discovery unavailable, codes still work')
     for (const [id, handle] of rooms) {
       if (!wanted.has(id)) {
@@ -122,6 +129,14 @@ export async function rejoinRooms(reason: string): Promise<void> {
 
 export function initDiscovery(): void {
   void runDiscovery()
+
+  // Flipping the option joins or leaves the BDIX room right away (queued behind a run in flight).
+  let bdixWas = bdixDiscovery.value
+  bdixDiscovery.subscribe((on) => {
+    if (on === bdixWas) return
+    bdixWas = on
+    void (running ?? Promise.resolve()).then(() => runDiscovery({ reason: `BDIX discovery ${on ? 'on' : 'off'}` }))
+  })
 
   // A new network leaves the relay sockets on the old one, open but dead.
   const networkChanged = (reason: string) => {

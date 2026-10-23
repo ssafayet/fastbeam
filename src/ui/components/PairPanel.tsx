@@ -3,6 +3,7 @@ import { codeFromText, host, isValidCode, joinWithCode, normalizeCodeInput } fro
 import { hasPending, openPairSheet } from '../../state/ui'
 import { Button, IconButton } from './Controls'
 import { CopyIcon, QrIcon } from './Icons'
+import { BdixToggle } from './BdixToggle'
 import { copyCode, copyLink, onPairedDefault, useHosting } from '../sheets/PairSheet'
 
 /** Screen 13's side panel: the code is always on show on desktop; QR and password open the full sheet. */
@@ -89,6 +90,8 @@ export function PairPanel() {
           Scan a QR instead
         </button>
       </div>
+      <div class="rule" />
+      <BdixToggle flat />
     </aside>
   )
 }
