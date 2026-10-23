@@ -14,8 +14,33 @@ export const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.cloudflare.com:3478' },
 ]
 
-/** Leave undefined to use Trystero's default Nostr relay set; override here if relays misbehave. */
-export const RELAY_URLS: string[] | undefined = undefined
+/**
+ * Nostr relays used for signaling. Two devices only find each other through a relay they both use.
+ * Trystero's default is 4 relays picked from its list by hashing the app id, and by Oct 2026 two of those
+ * (relay.novospes.com, relay.piazza.today) were dead, which left discovery hanging on the other two.
+ *
+ * The long-term set: each has a known operator, has run since 2024 or earlier, takes ephemeral events
+ * from anonymous keys without auth, payment or web-of-trust, and passed two ephemeral round trips and
+ * 30-event bursts with nothing rate-limited (Oct 19, 2026). One relay per operator. Rejected then:
+ * relay.damus.io (bans the IP after rate-limit hits, risky behind a shared NAT), nostr.mom (nos.lol's
+ * operator, rate-limits), offchain.pub and nostr.bitcoiner.social (web of trust after ~14 events),
+ * relay.nos.social and relay.coinos.io (kinds not allowed), and relay.nostr.band (gone).
+ *
+ * Every relay listed is used (Trystero ignores RELAY_REDUNDANCY when given a list); leave undefined to
+ * fall back to Trystero's pick of RELAY_REDUNDANCY relays.
+ */
+export const RELAY_URLS: string[] | undefined = [
+  'wss://relay.primal.net', // Primal (company), since early 2023
+  'wss://nos.lol', // since early 2023, a common client default
+  'wss://relay.snort.social', // Snort (v0l), since Jan 2023
+  'wss://nostr-pub.wellorder.net', // Greg Heartsfield, author of nostr-rs-relay, since early 2023
+  'wss://relay.nostr.net', // aljaz (nostr.si), since 2024
+  'wss://nostr.data.haus', // data.haus, since Jan 2024
+  // Transition only: the two live relays of Trystero's hashed default, which builds before this list
+  // still use. They let old and new clients meet until the old ones reload. Remove after Dec 2026.
+  'wss://nostrcity-club.fly.dev',
+  'wss://nostr.red5d.dev',
+]
 export const RELAY_REDUNDANCY = 4
 
 /** CORS-enabled public IP lookup used only when STUN yields no reflexive candidate (UDP blocked). */
