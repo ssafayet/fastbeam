@@ -107,6 +107,10 @@ All five milestones are built in one pass (user's call on Oct 7, 2026). Remainin
   fires a synthetic `connectionstatechange`, so Trystero drops the peer and re-handshakes (PR #1). A
   self-tab keeps the transport (`keepTransport`) or the two tabs reconnect forever.
 - The host's code expiry pauses while a joiner is connecting and resumes if they drop before pairing.
+- Hellos are swapped with `exchangeHello` (discovery and the code-room host; the joiner, which also repeats
+  `pair-join`, sends its last copy by hand): repeat until theirs arrives, then send ours once more.
+  Without the last copy, a first hello dropped before the other channel existed left that side waiting 15 s
+  and tearing the connection down.
 - Status console (desktop header button, Ctrl/⌘ + `): `state/log.ts` ring buffer; `logger('scope')` in net,
   pairing, transfer and boot code. Use it first when discovery or pairing misbehaves.
 - Browsers cannot dial a peer by IP: every new WebRTC connection needs an SDP exchange through signaling.

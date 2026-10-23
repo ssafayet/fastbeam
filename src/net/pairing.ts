@@ -30,7 +30,7 @@ import {
   verifyAuthMac,
 } from './pairAuth'
 import { createPeerLink, runIntroduction, type ControlMessage, type PeerLink } from './peerLink'
-import { attachPeer, helloMessage, isHello, sendUntil, waitForControl, type HelloMessage } from './session'
+import { attachPeer, exchangeHello, helloMessage, isHello, sendUntil, waitForControl, type HelloMessage } from './session'
 import { trysteroSignaling, type RoomHandle } from './signaling'
 import { suggestPassword } from './wordlist'
 
@@ -254,9 +254,7 @@ async function hostIntro(room: HostRoom, link: PeerLink, previous: Promise<unkno
   }
   // Nothing else may slip in while this introduction completes.
   room.retired = true
-  const theirs = waitForControl(link, PEER_TIMEOUT_MS, isHello)
-  sendUntil(link, helloMessage(), theirs)
-  const hello = (await theirs) as HelloMessage
+  const hello = await exchangeHello(link, PEER_TIMEOUT_MS)
   const peer = await attachPeer(link, hello, { paired: true, passwordVerified })
   flashPeer(peer.deviceId)
   // The code is single-use: show a fresh one, keep this room alive for the peer that used it.
@@ -536,6 +534,7 @@ async function joinerIntro(session: JoinSession, link: PeerLink, previous: Promi
     if (!passwordVerified) sendUntil(link, { type: 'pair-join', code: session.code }, theirs)
     sendUntil(link, helloMessage(), theirs)
     const hello = (await theirs) as HelloMessage
+    link.sendControl(helloMessage()) // one more copy now the host can hear it, as exchangeHello does
     const peer = await attachPeer(link, hello, { paired: true, passwordVerified })
     endJoin(session)
     session.outcome = 'paired'
